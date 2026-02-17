@@ -1,0 +1,66 @@
+{
+  "portfolios": [
+    {
+      "id": "24b29077-6ae2-4fa8-973f-8a5d38e41256",
+      "name": "Main Portfolio",
+      "holdings": [
+        {
+          "symbol": "PLTR",
+          "name": "PLTR",
+          "type": "stock",
+          "quantity": 1,
+          "purchasePrice": 80,
+          "purchaseDate": "2026-02-17",
+          "id": "ef9c66c5-4f9b-4316-935a-285647ab71e8"
+        },
+        {
+          "symbol": "COST",
+          "name": "Costco",
+          "type": "stock",
+          "quantity": 1,
+          "purchasePrice": 500,
+          "purchaseDate": "2026-02-17",
+          "id": "129274bc-51ea-4265-9491-618e45e6ba8f"
+        },
+        {
+          "id": "f90b42ad-7f49-4305-a1cc-ff412fb20f92",
+          "symbol": "AAPL",
+          "name": "Apple Inc.",
+          "type": "stock",
+          "quantity": 10,
+          "purchasePrice": 150,
+          "purchaseDate": "2026-02-17"
+        },
+        {
+          "id": "fd1931e4-94f4-42ee-91b8-1c36138d3a3a",
+          "symbol": "BTC",
+          "name": "Bitcoin",
+          "type": "crypto",
+          "quantity": 0.5,
+          "purchasePrice": 42000,
+          "purchaseDate": "2026-02-17"
+        }
+      ],
+      "createdAt": "2026-02-17T19:03:29.891Z",
+      "lastUpdated": "2026-02-17T19:12:53.274Z"
+    },
+    {
+      "id": "829464d6-547d-48c3-91d3-e2bdf111618a",
+      "name": "Crypto",
+      "holdings": [
+        {
+          "id": "bed6a3e1-01f5-4376-8006-8aba6b58f677",
+          "symbol": "ETH",
+          "name": "Ethereum",
+          "type": "crypto",
+          "quantity": 2,
+          "purchasePrice": 2500,
+          "purchaseDate": "2026-02-17"
+        }
+      ],
+      "createdAt": "2026-02-17T19:13:01.810Z",
+      "lastUpdated": "2026-02-17T19:13:01.839Z"
+    }
+  ],
+  "activePortfolioId": "24b29077-6ae2-4fa8-973f-8a5d38e41256"
+}

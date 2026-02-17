@@ -1,65 +1,591 @@
-import Image from "next/image";
+'use client';
 
-export default function Home() {
+import { useState, useEffect } from 'react';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
+import { TrendingUp, TrendingDown, Plus, Download, RefreshCw, Trash2, Edit2, X, Wallet, BarChart3, DollarSign, ChevronDown, FolderPlus, Trash, MoreVertical } from 'lucide-react';
+import { Holding, PriceData, PortfolioSummary, Portfolio } from '@/lib/types';
+
+const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
+
+export default function PortfolioPage() {
+  const [portfolios, setPortfolios] = useState<Portfolio[]>([]);
+  const [activePortfolioId, setActivePortfolioId] = useState<string | null>(null);
+  const [holdings, setHoldings] = useState<Holding[]>([]);
+  const [prices, setPrices] = useState<Record<string, PriceData>>({});
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
+  const [showNewPortfolio, setShowNewPortfolio] = useState(false);
+  const [newPortfolioName, setNewPortfolioName] = useState('');
+
+  const [formData, setFormData] = useState({
+    symbol: '',
+    name: '',
+    type: 'stock' as 'stock' | 'crypto',
+    quantity: '',
+    purchasePrice: '',
+    purchaseDate: new Date().toISOString().split('T')[0],
+  });
+
+  useEffect(() => {
+    fetchPortfolio();
+  }, []);
+
+  async function fetchPortfolio() {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/portfolio');
+      const data = await res.json();
+      setPortfolios(data.portfolios || []);
+      setActivePortfolioId(data.activePortfolioId);
+      setHoldings(data.portfolio?.holdings || []);
+      
+      if (data.portfolio?.holdings?.length > 0) {
+        const symbols = data.portfolio.holdings.map((h: Holding) => h.symbol);
+        const types = data.portfolio.holdings.map((h: Holding) => h.type);
+        
+        const priceRes = await fetch('/api/prices', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ symbols, types }),
+        });
+        
+        const priceData = await priceRes.json();
+        setPrices(priceData);
+      }
+    } catch (error) {
+      console.error('Error fetching portfolio:', error);
+    }
+    setLoading(false);
+  }
+
+  async function createPortfolio() {
+    if (!newPortfolioName.trim()) return;
+    try {
+      await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'createPortfolio', name: newPortfolioName }),
+      });
+      setNewPortfolioName('');
+      setShowNewPortfolio(false);
+      fetchPortfolio();
+    } catch (error) {
+      console.error('Error creating portfolio:', error);
+    }
+  }
+
+  async function switchPortfolio(id: string) {
+    try {
+      await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'setActive', id }),
+      });
+      setShowPortfolioMenu(false);
+      fetchPortfolio();
+    } catch (error) {
+      console.error('Error switching portfolio:', error);
+    }
+  }
+
+  async function deletePortfolio(id: string) {
+    if (!confirm('Delete this portfolio? This cannot be undone.')) return;
+    try {
+      await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'deletePortfolio', id }),
+      });
+      fetchPortfolio();
+    } catch (error) {
+      console.error('Error deleting portfolio:', error);
+    }
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    
+    const holdingData = {
+      symbol: formData.symbol.toUpperCase(),
+      name: formData.name,
+      type: formData.type,
+      quantity: parseFloat(formData.quantity),
+      purchasePrice: parseFloat(formData.purchasePrice),
+      purchaseDate: formData.purchaseDate,
+    };
+
+    try {
+      if (editingId) {
+        await fetch('/api/portfolio', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: editingId, updates: holdingData }),
+        });
+      } else {
+        await fetch('/api/portfolio', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(holdingData),
+        });
+      }
+      
+      setFormData({
+        symbol: '',
+        name: '',
+        type: 'stock',
+        quantity: '',
+        purchasePrice: '',
+        purchaseDate: new Date().toISOString().split('T')[0],
+      });
+      setShowForm(false);
+      setEditingId(null);
+      fetchPortfolio();
+    } catch (error) {
+      console.error('Error saving holding:', error);
+    }
+  }
+
+  async function handleDelete(id: string) {
+    if (!confirm('Delete this holding?')) return;
+    
+    try {
+      await fetch('/api/portfolio', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      fetchPortfolio();
+    } catch (error) {
+      console.error('Error deleting holding:', error);
+    }
+  }
+
+  function handleEdit(holding: Holding) {
+    setFormData({
+      symbol: holding.symbol,
+      name: holding.name,
+      type: holding.type,
+      quantity: holding.quantity.toString(),
+      purchasePrice: holding.purchasePrice.toString(),
+      purchaseDate: holding.purchaseDate,
+    });
+    setEditingId(holding.id);
+    setShowForm(true);
+  }
+
+  function exportCsv() {
+    window.open('/api/export', '_blank');
+  }
+
+  const activePortfolio = portfolios.find(p => p.id === activePortfolioId);
+
+  const summary: PortfolioSummary = holdings.reduce(
+    (acc, h) => {
+      const price = prices[h.symbol]?.price || h.purchasePrice;
+      const value = price * h.quantity;
+      const cost = h.purchasePrice * h.quantity;
+      return {
+        totalValue: acc.totalValue + value,
+        totalCost: acc.totalCost + cost,
+        totalGain: acc.totalGain + (value - cost),
+        totalGainPercent: 0,
+      };
+    },
+    { totalValue: 0, totalCost: 0, totalGain: 0, totalGainPercent: 0 }
+  );
+  summary.totalGainPercent = summary.totalCost > 0 
+    ? (summary.totalGain / summary.totalCost) * 100 
+    : 0;
+
+  const allocationData = holdings.map((h, i) => {
+    const value = (prices[h.symbol]?.price || h.purchasePrice) * h.quantity;
+    return {
+      name: h.symbol,
+      value,
+      color: COLORS[i % COLORS.length],
+    };
+  });
+
   return (
-    <div className="flex min-h-screen items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex min-h-screen w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-indigo-600 rounded-xl">
+              <Wallet size={28} />
+            </div>
+            <div>
+              <div className="relative">
+                <button 
+                  onClick={() => setShowPortfolioMenu(!showPortfolioMenu)}
+                  className="flex items-center gap-2 hover:text-indigo-400 transition-colors"
+                >
+                  <h1 className="text-2xl font-bold">{activePortfolio?.name || 'Portfolio'}</h1>
+                  <ChevronDown size={18} />
+                </button>
+                {showPortfolioMenu && (
+                  <div className="absolute top-full left-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-xl z-50 overflow-hidden">
+                    <div className="max-h-64 overflow-y-auto">
+                      {portfolios.map(p => (
+                        <div key={p.id} className="flex items-center justify-between px-4 py-2 hover:bg-slate-700/50">
+                          <button 
+                            onClick={() => switchPortfolio(p.id)}
+                            className={`flex-1 text-left ${p.id === activePortfolioId ? 'text-indigo-400' : ''}`}
+                          >
+                            {p.name}
+                          </button>
+                          {portfolios.length > 1 && (
+                            <button 
+                              onClick={() => deletePortfolio(p.id)}
+                              className="p-1 hover:bg-red-500/20 rounded"
+                            >
+                              <Trash size={14} className="text-red-400" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="border-t border-slate-700">
+                      <button 
+                        onClick={() => { setShowNewPortfolio(true); setShowPortfolioMenu(false); }}
+                        className="w-full flex items-center gap-2 px-4 py-3 hover:bg-slate-700/50 text-indigo-400"
+                      >
+                        <FolderPlus size={16} />
+                        New Portfolio
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <p className="text-slate-400 text-sm">Track your investments</p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={fetchPortfolio}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-700/50 hover:bg-slate-700 rounded-xl transition-colors"
             >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
+              <RefreshCw size={18} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <button
+              onClick={exportCsv}
+              className="flex items-center gap-2 px-4 py-2.5 bg-slate-700/50 hover:bg-slate-700 rounded-xl transition-colors"
             >
-              Learning
-            </a>{" "}
-            center.
-          </p>
+              <Download size={18} />
+              <span className="hidden sm:inline">Export</span>
+            </button>
+            <button
+              onClick={() => { setShowForm(true); setEditingId(null); setFormData({
+                symbol: '', name: '', type: 'stock', quantity: '',
+                purchasePrice: '', purchaseDate: new Date().toISOString().split('T')[0],
+              }); }}
+              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-colors font-medium"
+            >
+              <Plus size={18} />
+              <span className="hidden sm:inline">Add</span>
+            </button>
+          </div>
         </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
+
+        {loading ? (
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <DollarSign size={18} className="text-indigo-400" />
+                  <p className="text-slate-400 text-sm">Total Value</p>
+                </div>
+                <p className="text-2xl font-bold">${summary.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <Wallet size={18} className="text-slate-400" />
+                  <p className="text-slate-400 text-sm">Total Cost</p>
+                </div>
+                <p className="text-2xl font-bold">${summary.totalCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <BarChart3 size={18} className={summary.totalGain >= 0 ? 'text-green-400' : 'text-red-400'} />
+                  <p className="text-slate-400 text-sm">Total P&L</p>
+                </div>
+                <p className={`text-2xl font-bold flex items-center gap-2 ${summary.totalGain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {summary.totalGain >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+                  {summary.totalGain >= 0 ? '+' : ''}{summary.totalGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp size={18} className={summary.totalGainPercent >= 0 ? 'text-green-400' : 'text-red-400'} />
+                  <p className="text-slate-400 text-sm">Return</p>
+                </div>
+                <p className={`text-2xl font-bold ${summary.totalGainPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {summary.totalGainPercent >= 0 ? '+' : ''}{summary.totalGainPercent.toFixed(2)}%
+                </p>
+              </div>
+            </div>
+
+            {allocationData.length > 0 && (
+              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700 mb-8">
+                <h2 className="text-lg font-semibold mb-4">Allocation</h2>
+                <div className="h-72">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={allocationData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={70}
+                        outerRadius={110}
+                        paddingAngle={3}
+                        dataKey="value"
+                      >
+                        {allocationData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} stroke="transparent" />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value) => `$${Number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                        contentStyle={{ backgroundColor: '#1e293b', border: '1px solid #334155', borderRadius: '12px' }}
+                        itemStyle={{ color: '#e2e8f0' }}
+                      />
+                      <Legend 
+                        formatter={(value) => <span style={{ color: '#e2e8f0' }}>{value}</span>}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+            )}
+
+            <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-slate-700/30">
+                    <tr>
+                      <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Asset</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Price</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Qty</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Value</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Cost</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">P&L</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Return</th>
+                      <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700/50">
+                    {holdings.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="px-6 py-16 text-center text-slate-500">
+                          <div className="flex flex-col items-center gap-3">
+                            <Wallet size={48} className="text-slate-600" />
+                            <p>No holdings yet. Add your first asset!</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      holdings.map((h) => {
+                        const price = prices[h.symbol]?.price || h.purchasePrice;
+                        const change = prices[h.symbol]?.changePercent || 0;
+                        const value = price * h.quantity;
+                        const cost = h.purchasePrice * h.quantity;
+                        const gain = value - cost;
+                        const gainPercent = cost > 0 ? (gain / cost) * 100 : 0;
+                        
+                        return (
+                          <tr key={h.id} className="hover:bg-slate-700/30 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold ${h.type === 'crypto' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                                  {h.symbol.slice(0, 2)}
+                                </div>
+                                <div>
+                                  <div className="font-semibold">{h.symbol}</div>
+                                  <div className="text-sm text-slate-400">{h.name}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <div>${price.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                              <div className={`text-sm ${change >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                {change >= 0 ? '+' : ''}{change.toFixed(2)}%
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right text-slate-300">{h.quantity}</td>
+                            <td className="px-6 py-4 text-right font-semibold">${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className="px-6 py-4 text-right text-slate-400">${cost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                            <td className={`px-6 py-4 text-right font-medium ${gain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {gain >= 0 ? '+' : ''}{gain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className={`px-6 py-4 text-right ${gainPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {gainPercent >= 0 ? '+' : ''}{gainPercent.toFixed(2)}%
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex justify-end gap-1">
+                                <button onClick={() => handleEdit(h)} className="p-2 hover:bg-slate-600 rounded-lg transition-colors">
+                                  <Edit2 size={16} className="text-slate-400" />
+                                </button>
+                                <button onClick={() => handleDelete(h.id)} className="p-2 hover:bg-red-500/20 rounded-lg transition-colors">
+                                  <Trash2 size={16} className="text-red-400" />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
+
+        {showForm && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold">{editingId ? 'Edit' : 'Add'} Asset</h2>
+                <button onClick={() => { setShowForm(false); setEditingId(null); }} className="p-2 hover:bg-slate-700 rounded-lg">
+                  <X size={20} />
+                </button>
+              </div>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2">Symbol</label>
+                    <input
+                      type="text"
+                      value={formData.symbol}
+                      onChange={(e) => setFormData({ ...formData, symbol: e.target.value })}
+                      placeholder="AAPL"
+                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2">Type</label>
+                    <select
+                      value={formData.type}
+                      onChange={(e) => setFormData({ ...formData, type: e.target.value as 'stock' | 'crypto' })}
+                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="stock">Stock</option>
+                      <option value="crypto">Crypto</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Name</label>
+                  <input
+                    type="text"
+                    value={formData.name}
+                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    placeholder="Apple Inc."
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2">Quantity</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.quantity}
+                      onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
+                      placeholder="10"
+                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2">Purchase Price</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={formData.purchasePrice}
+                      onChange={(e) => setFormData({ ...formData, purchasePrice: e.target.value })}
+                      placeholder="150.00"
+                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Purchase Date</label>
+                  <input
+                    type="date"
+                    value={formData.purchaseDate}
+                    onChange={(e) => setFormData({ ...formData, purchaseDate: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowForm(false); setEditingId(null); }}
+                    className="flex-1 px-4 py-3 border border-slate-600 rounded-xl hover:bg-slate-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-colors font-medium">
+                    {editingId ? 'Update' : 'Add Asset'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {showNewPortfolio && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-sm border border-slate-700">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold">New Portfolio</h2>
+                <button onClick={() => setShowNewPortfolio(false)} className="p-2 hover:bg-slate-700 rounded-lg">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Portfolio Name</label>
+                  <input
+                    type="text"
+                    value={newPortfolioName}
+                    onChange={(e) => setNewPortfolioName(e.target.value)}
+                    placeholder="My Portfolio"
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    autoFocus
+                  />
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowNewPortfolio(false)}
+                    className="flex-1 px-4 py-3 border border-slate-600 rounded-xl hover:bg-slate-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    onClick={createPortfolio}
+                    className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-colors font-medium"
+                  >
+                    Create
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
