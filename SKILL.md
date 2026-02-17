@@ -9,7 +9,6 @@ metadata:
       env: []
       files:
         - portfolio.js
-        - data/portfolio.json
 ---
 
 # Portfolio Tracker
@@ -101,7 +100,7 @@ Then open http://localhost:3000
 
 ## Data Storage
 
-Portfolio data is stored locally in `data/portfolio.json`.
+Portfolio data is stored locally in `data/portfolio.json`. The data file is created automatically on first run with an empty portfolio.
 
 ## Features
 
