@@ -8,7 +8,7 @@ metadata:
     requires:
       env: []
       files:
-        - portfolio.js
+        - portfolio.ts
 ---
 
 # Portfolio Tracker
@@ -32,7 +32,7 @@ Show all holdings with current values and P&L.
 
 **Command:**
 ```
-node portfolio.js list
+node portfolio.ts list
 ```
 
 ### 2. Add Holding
@@ -40,13 +40,13 @@ Add a new stock or crypto holding.
 
 **Command:**
 ```
-node portfolio.js add <symbol> <quantity> <price> <name> [type]
+node portfolio.ts add <symbol> <quantity> <price> <name> [type]
 ```
 
 **Examples:**
 ```
-node portfolio.js add AAPL 10 150 "Apple Inc." stock
-node portfolio.js add BTC 0.5 45000 Bitcoin crypto
+node portfolio.ts add AAPL 10 150 "Apple Inc." stock
+node portfolio.ts add BTC 0.5 45000 Bitcoin crypto
 ```
 
 ### 3. Sell Holding
@@ -54,13 +54,13 @@ Sell shares using FIFO (First-In-First-Out) cost basis method.
 
 **Command:**
 ```
-node portfolio.js sell <symbol> <quantity> <price> [date]
+node portfolio.ts sell <symbol> <quantity> <price> [date]
 ```
 
 **Examples:**
 ```
-node portfolio.js sell AAPL 5 180 2025-06-01
-node portfolio.js sell BTC 0.25 50000
+node portfolio.ts sell AAPL 5 180 2025-06-01
+node portfolio.ts sell BTC 0.25 50000
 ```
 
 ### 4. Transaction History
@@ -68,13 +68,13 @@ View sell history for all holdings or a specific symbol.
 
 **Command:**
 ```
-node portfolio.js history [symbol]
+node portfolio.ts history [symbol]
 ```
 
 **Examples:**
 ```
-node portfolio.js history
-node portfolio.js history AAPL
+node portfolio.ts history
+node portfolio.ts history AAPL
 ```
 
 ### 5. P&L Summary
@@ -82,7 +82,7 @@ Show both realized and unrealized profit/loss.
 
 **Command:**
 ```
-node portfolio.js pnl
+node portfolio.ts pnl
 ```
 
 ### 6. Remove Holding
@@ -90,7 +90,7 @@ Remove a holding by symbol.
 
 **Command:**
 ```
-node portfolio.js remove <symbol>
+node portfolio.ts remove <symbol>
 ```
 
 ### 4. Portfolio Value
@@ -98,7 +98,7 @@ Show total portfolio value and P&L.
 
 **Command:**
 ```
-node portfolio.js value
+node portfolio.ts value
 ```
 
 ### 5. Manage Portfolios
@@ -106,9 +106,9 @@ List, switch, or create portfolios.
 
 **Commands:**
 ```
-node portfolio.js portfolios
-node portfolio.js switch "Portfolio Name"
-node portfolio.js create "New Portfolio"
+node portfolio.ts portfolios
+node portfolio.ts switch "Portfolio Name"
+node portfolio.ts create "New Portfolio"
 ```
 
 ## Installation
@@ -136,7 +136,7 @@ Then open http://localhost:3000
 
 ## Data Storage
 
-Portfolio data is stored locally in `data/portfolio.json`. The data file is created automatically on first run with an empty portfolio.
+Portfolio data is stored locally in `data/portfolio.tson`. The data file is created automatically on first run with an empty portfolio.
 
 ## Features
 
