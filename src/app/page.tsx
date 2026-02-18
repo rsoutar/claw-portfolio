@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { TrendingUp, TrendingDown, Plus, Download, RefreshCw, Trash2, Edit2, X, Wallet, BarChart3, DollarSign, ChevronDown, FolderPlus, Trash, MoreVertical } from 'lucide-react';
+import { TrendingUp, Plus, Download, RefreshCw, Trash2, Edit2, X, Wallet, BarChart3, DollarSign, ChevronDown, FolderPlus, Trash } from 'lucide-react';
 import { Holding, PriceData, PortfolioSummary, Portfolio } from '@/lib/types';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
@@ -14,10 +14,13 @@ export default function PortfolioPage() {
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showSellForm, setShowSellForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [sellingHolding, setSellingHolding] = useState<Holding | null>(null);
   const [showPortfolioMenu, setShowPortfolioMenu] = useState(false);
   const [showNewPortfolio, setShowNewPortfolio] = useState(false);
   const [newPortfolioName, setNewPortfolioName] = useState('');
+  const [realizedPL, setRealizedPL] = useState(0);
 
   const [formData, setFormData] = useState({
     symbol: '',
@@ -28,11 +31,13 @@ export default function PortfolioPage() {
     purchaseDate: new Date().toISOString().split('T')[0],
   });
 
-  useEffect(() => {
-    fetchPortfolio();
-  }, []);
+  const [sellData, setSellData] = useState({
+    quantity: '',
+    sellPrice: '',
+    sellDate: new Date().toISOString().split('T')[0],
+  });
 
-  async function fetchPortfolio() {
+  const fetchPortfolio = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch('/api/portfolio');
@@ -40,6 +45,7 @@ export default function PortfolioPage() {
       setPortfolios(data.portfolios || []);
       setActivePortfolioId(data.activePortfolioId);
       setHoldings(data.portfolio?.holdings || []);
+      setRealizedPL(data.realizedPL || 0);
       
       if (data.portfolio?.holdings?.length > 0) {
         const symbols = data.portfolio.holdings.map((h: Holding) => h.symbol);
@@ -58,7 +64,12 @@ export default function PortfolioPage() {
       console.error('Error fetching portfolio:', error);
     }
     setLoading(false);
-  }
+  }, []);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    fetchPortfolio();
+  }, []);
 
   async function createPortfolio() {
     if (!newPortfolioName.trim()) return;
@@ -173,6 +184,48 @@ export default function PortfolioPage() {
     });
     setEditingId(holding.id);
     setShowForm(true);
+  }
+
+  function handleSellClick(holding: Holding) {
+    setSellingHolding(holding);
+    const currentPrice = prices[holding.symbol]?.price || holding.purchasePrice;
+    setSellData({
+      quantity: '',
+      sellPrice: currentPrice.toString(),
+      sellDate: new Date().toISOString().split('T')[0],
+    });
+    setShowSellForm(true);
+  }
+
+  async function handleSellSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!sellingHolding) return;
+    
+    try {
+      const res = await fetch('/api/portfolio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'sell',
+          symbol: sellingHolding.symbol,
+          quantity: sellData.quantity,
+          sellPrice: sellData.sellPrice,
+          sellDate: sellData.sellDate,
+        }),
+      });
+      
+      if (!res.ok) {
+        const error = await res.json();
+        alert(error.error || 'Failed to sell');
+        return;
+      }
+      
+      setShowSellForm(false);
+      setSellingHolding(null);
+      fetchPortfolio();
+    } catch (error) {
+      console.error('Error selling:', error);
+    }
   }
 
   function exportCsv() {
@@ -296,7 +349,7 @@ export default function PortfolioPage() {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
               <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                 <div className="flex items-center gap-2 mb-2">
                   <DollarSign size={18} className="text-indigo-400" />
@@ -313,21 +366,29 @@ export default function PortfolioPage() {
               </div>
               <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                 <div className="flex items-center gap-2 mb-2">
-                  <BarChart3 size={18} className={summary.totalGain >= 0 ? 'text-green-400' : 'text-red-400'} />
-                  <p className="text-slate-400 text-sm">Total P&L</p>
+                  <BarChart3 size={18} className={realizedPL >= 0 ? 'text-green-400' : 'text-red-400'} />
+                  <p className="text-slate-400 text-sm">Realized P&L</p>
                 </div>
-                <p className={`text-2xl font-bold flex items-center gap-2 ${summary.totalGain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {summary.totalGain >= 0 ? <TrendingUp size={20} /> : <TrendingDown size={20} />}
+                <p className={`text-2xl font-bold ${realizedPL >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {realizedPL >= 0 ? '+' : ''}{realizedPL.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </p>
+              </div>
+              <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
+                <div className="flex items-center gap-2 mb-2">
+                  <TrendingUp size={18} className={summary.totalGain >= 0 ? 'text-green-400' : 'text-red-400'} />
+                  <p className="text-slate-400 text-sm">Unrealized P&L</p>
+                </div>
+                <p className={`text-2xl font-bold ${summary.totalGain >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {summary.totalGain >= 0 ? '+' : ''}{summary.totalGain.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700">
                 <div className="flex items-center gap-2 mb-2">
-                  <TrendingUp size={18} className={summary.totalGainPercent >= 0 ? 'text-green-400' : 'text-red-400'} />
-                  <p className="text-slate-400 text-sm">Return</p>
+                  <TrendingUp size={18} className={(summary.totalGain + realizedPL) >= 0 ? 'text-green-400' : 'text-red-400'} />
+                  <p className="text-slate-400 text-sm">Total P&L</p>
                 </div>
-                <p className={`text-2xl font-bold ${summary.totalGainPercent >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {summary.totalGainPercent >= 0 ? '+' : ''}{summary.totalGainPercent.toFixed(2)}%
+                <p className={`text-2xl font-bold ${(summary.totalGain + realizedPL) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {(summary.totalGain + realizedPL) >= 0 ? '+' : ''}{(summary.totalGain + realizedPL).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -429,6 +490,9 @@ export default function PortfolioPage() {
                             </td>
                             <td className="px-6 py-4">
                               <div className="flex justify-end gap-1">
+                                <button onClick={() => handleSellClick(h)} className="p-2 hover:bg-green-500/20 rounded-lg transition-colors" title="Sell">
+                                  <DollarSign size={16} className="text-green-400" />
+                                </button>
                                 <button onClick={() => handleEdit(h)} className="p-2 hover:bg-slate-600 rounded-lg transition-colors">
                                   <Edit2 size={16} className="text-slate-400" />
                                 </button>
@@ -539,6 +603,73 @@ export default function PortfolioPage() {
                   </button>
                   <button type="submit" className="flex-1 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl transition-colors font-medium">
                     {editingId ? 'Update' : 'Add Asset'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {showSellForm && sellingHolding && (
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="bg-slate-800 rounded-2xl p-6 w-full max-w-md border border-slate-700">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-xl font-semibold">Sell {sellingHolding.symbol}</h2>
+                <button onClick={() => { setShowSellForm(false); setSellingHolding(null); }} className="p-2 hover:bg-slate-700 rounded-lg">
+                  <X size={20} />
+                </button>
+              </div>
+              <div className="mb-4 p-3 bg-slate-700/50 rounded-xl">
+                <p className="text-sm text-slate-400">Available: <span className="text-white font-semibold">{sellingHolding.quantity} {sellingHolding.symbol}</span></p>
+              </div>
+              <form onSubmit={handleSellSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2">Quantity</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={sellData.quantity}
+                      onChange={(e) => setSellData({ ...sellData, quantity: e.target.value })}
+                      placeholder="5"
+                      max={sellingHolding.quantity}
+                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-slate-400 mb-2">Sell Price</label>
+                    <input
+                      type="number"
+                      step="any"
+                      value={sellData.sellPrice}
+                      onChange={(e) => setSellData({ ...sellData, sellPrice: e.target.value })}
+                      placeholder="180.00"
+                      className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
+                      required
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-400 mb-2">Sell Date</label>
+                  <input
+                    type="date"
+                    value={sellData.sellDate}
+                    onChange={(e) => setSellData({ ...sellData, sellDate: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-700 border border-slate-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500"
+                    required
+                  />
+                </div>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setShowSellForm(false); setSellingHolding(null); }}
+                    className="flex-1 px-4 py-3 border border-slate-600 rounded-xl hover:bg-slate-700 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="flex-1 px-4 py-3 bg-green-600 hover:bg-green-500 rounded-xl transition-colors font-medium">
+                    Sell
                   </button>
                 </div>
               </form>

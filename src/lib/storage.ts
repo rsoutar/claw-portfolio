@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { PortfolioState, Portfolio, Holding } from './types';
+import { PortfolioState, Portfolio, Holding, SellRecord } from './types';
 
 const DATA_DIR = path.join(process.cwd(), 'data');
 const PORTFOLIO_FILE = path.join(DATA_DIR, 'portfolio.json');
@@ -16,6 +16,7 @@ function createDefaultPortfolio(): Portfolio {
     id: crypto.randomUUID(),
     name: 'Main Portfolio',
     holdings: [],
+    sellHistory: [],
     createdAt: new Date().toISOString(),
     lastUpdated: new Date().toISOString(),
   };
@@ -40,6 +41,11 @@ export function loadPortfolio(): PortfolioState {
       state.portfolios = [defaultPortfolio];
       state.activePortfolioId = defaultPortfolio.id;
       savePortfolio(state);
+    }
+    for (const portfolio of state.portfolios) {
+      if (!portfolio.sellHistory) {
+        portfolio.sellHistory = [];
+      }
     }
     return state;
   } catch {
@@ -73,6 +79,7 @@ export function createPortfolio(name: string): Portfolio {
     id: crypto.randomUUID(),
     name,
     holdings: [],
+    sellHistory: [],
     createdAt: new Date().toISOString(),
     lastUpdated: new Date().toISOString(),
   };
@@ -142,4 +149,25 @@ export function exportToCsv(): string {
     h.purchaseDate,
   ]);
   return [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+}
+
+export function getSellHistory(symbol?: string): SellRecord[] {
+  const portfolio = getActivePortfolio();
+  if (symbol) {
+    return portfolio.sellHistory.filter(s => s.symbol === symbol.toUpperCase());
+  }
+  return portfolio.sellHistory;
+}
+
+export function addSellRecord(record: Omit<SellRecord, 'id'>): SellRecord {
+  const state = loadPortfolio();
+  const portfolio = state.portfolios.find(p => p.id === state.activePortfolioId) || state.portfolios[0];
+  const newRecord: SellRecord = {
+    ...record,
+    id: crypto.randomUUID(),
+  };
+  portfolio.sellHistory.push(newRecord);
+  portfolio.lastUpdated = new Date().toISOString();
+  savePortfolio(state);
+  return newRecord;
 }
