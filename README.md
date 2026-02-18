@@ -27,6 +27,15 @@ portfolio add BTC 0.5 45000 Bitcoin crypto
 # Remove a holding
 portfolio remove AAPL
 
+# Sell shares (FIFO cost basis)
+portfolio sell AAPL 5 180
+
+# Show transaction history
+portfolio history
+
+# Show P&L (realized + unrealized)
+portfolio pnl
+
 # Show total value
 portfolio value
 
@@ -64,6 +73,8 @@ Portfolio data: `data/portfolio.json`
 
 ## Tech Stack
 
+- TypeScript CLI (runtime via `tsx`)
+- Zod validation
 - Node.js (ESM)
 - Yahoo Finance API
 - CoinGecko API

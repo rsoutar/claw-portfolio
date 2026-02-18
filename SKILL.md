@@ -49,7 +49,43 @@ node portfolio.js add AAPL 10 150 "Apple Inc." stock
 node portfolio.js add BTC 0.5 45000 Bitcoin crypto
 ```
 
-### 3. Remove Holding
+### 3. Sell Holding
+Sell shares using FIFO (First-In-First-Out) cost basis method.
+
+**Command:**
+```
+node portfolio.js sell <symbol> <quantity> <price> [date]
+```
+
+**Examples:**
+```
+node portfolio.js sell AAPL 5 180 2025-06-01
+node portfolio.js sell BTC 0.25 50000
+```
+
+### 4. Transaction History
+View sell history for all holdings or a specific symbol.
+
+**Command:**
+```
+node portfolio.js history [symbol]
+```
+
+**Examples:**
+```
+node portfolio.js history
+node portfolio.js history AAPL
+```
+
+### 5. P&L Summary
+Show both realized and unrealized profit/loss.
+
+**Command:**
+```
+node portfolio.js pnl
+```
+
+### 6. Remove Holding
 Remove a holding by symbol.
 
 **Command:**
