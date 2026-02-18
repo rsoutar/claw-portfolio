@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
+import { fetchDividendData, calculateDividendMetrics, getPortfolioDividendSummary, filterUpcomingDividends } from './src/lib/dividends.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -65,6 +66,33 @@ type PortfolioState = z.infer<typeof stateSchema>;
 type PriceResult = {
   price: number;
   change: number;
+};
+
+type DividendData = {
+  trailingYield: number;
+  forwardYield: number;
+  annualDividendRate: number;
+  exDividendDate: string | null;
+  currency: string;
+  lastUpdated: string;
+};
+
+type HoldingWithDividends = Holding & {
+  dividendData?: DividendData;
+  yoc?: number;
+  projectedIncome?: number;
+};
+
+type DividendSummary = {
+  totalProjectedIncome: number;
+  weightedAvgYield: number;
+  totalYOC: number;
+  upcomingExDates: Array<{
+    symbol: string;
+    name: string;
+    date: string;
+    daysUntil: number;
+  }>;
 };
 
 const symbolArgSchema = z.string().trim().min(1).transform((value) => value.toUpperCase());
@@ -235,13 +263,16 @@ Portfolio Tracker CLI
 Usage: portfolio <command> [options]
 
 Commands:
-  list, ls                    List all holdings with values
+  list, ls [--no-dividends]   List all holdings with values and dividend info
   add <sym> <qty> <price> <name> [date] [type]
                               Add a holding
   sell <sym> <qty> <price> [date]
                               Sell shares (FIFO)
   history, hist [symbol]      Show transaction history
   pnl                         Show realized + unrealized P/L
+  dividends, div              Show detailed dividend information
+  dividend-summary, divsum    Show portfolio dividend summary
+  calendar, cal [days]        Show upcoming ex-dividend dates (default 30 days)
   remove, rm <symbol>         Remove a holding
   value, val                  Show portfolio total value
   portfolios, pf              List all portfolios
@@ -255,6 +286,9 @@ Examples:
   portfolio sell AAPL 5 180 2025-06-01
   portfolio history AAPL
   portfolio pnl
+  portfolio dividends
+  portfolio dividend-summary
+  portfolio calendar 60
   portfolio remove AAPL
   portfolio switch "Crypto"
   portfolio create "My Portfolio"
@@ -337,18 +371,25 @@ async function run(): Promise<void> {
   switch (command) {
     case 'list':
     case 'ls': {
-      parseOrExit(z.array(z.string()).max(0), args, ['Usage: portfolio list']);
+      const skipDividends = args.includes('--no-dividends');
       console.log(`\n${portfolio.name}\n`);
       if (portfolio.holdings.length === 0) {
         console.log('  No holdings yet.\n');
         return;
       }
 
-      console.log('  Symbol    Type      Qty     Cost      Value     P&L');
-      console.log(`  ${'-'.repeat(60)}`);
+      if (skipDividends) {
+        console.log('  Symbol    Type      Qty     Cost      Value     P&L');
+        console.log(`  ${'-'.repeat(60)}`);
+      } else {
+        console.log('  Symbol    Type      Qty     Cost      Value     P&L        Yield%   YOC%   Income/Yr');
+        console.log(`  ${'-'.repeat(85)}`);
+      }
 
       let totalCost = 0;
       let totalValue = 0;
+      const holdingsWithDividends: HoldingWithDividends[] = [];
+      const currentPrices = new Map<string, number>();
 
       for (const holding of portfolio.holdings) {
         const priceData = await fetchPrice(holding.symbol, holding.type);
@@ -359,20 +400,66 @@ async function run(): Promise<void> {
 
         totalCost += cost;
         totalValue += value;
+        currentPrices.set(holding.symbol, livePrice);
+
+        let holdingWithDividends: HoldingWithDividends = { ...holding };
+
+        if (!skipDividends && holding.type === 'stock') {
+          const dividendData = await fetchDividendData(holding.symbol);
+          if (dividendData) {
+            holdingWithDividends = calculateDividendMetrics(holding, dividendData, livePrice);
+          }
+        }
+
+        holdingsWithDividends.push(holdingWithDividends);
 
         const pnlString = pnl >= 0 ? `+$${pnl.toFixed(2)}` : `-$${Math.abs(pnl).toFixed(2)}`;
-        console.log(
-          `  ${holding.symbol.padEnd(8)} ${holding.type.padEnd(8)} ${holding.quantity
-            .toString()
-            .padEnd(7)} $${cost.toFixed(2).padStart(8)} $${value.toFixed(2).padStart(9)} ${pnlString.padStart(10)}`,
-        );
+
+        if (skipDividends) {
+          console.log(
+            `  ${holding.symbol.padEnd(8)} ${holding.type.padEnd(8)} ${holding.quantity
+              .toString()
+              .padEnd(7)} $${cost.toFixed(2).padStart(8)} $${value.toFixed(2).padStart(9)} ${pnlString.padStart(10)}`,
+          );
+        } else {
+          const yieldStr = holdingWithDividends.dividendData
+            ? `${holdingWithDividends.dividendData.trailingYield.toFixed(2)}%`
+            : 'N/A';
+          const yocStr = holdingWithDividends.yoc !== undefined
+            ? `${holdingWithDividends.yoc.toFixed(2)}%`
+            : 'N/A';
+          const incomeStr = holdingWithDividends.projectedIncome !== undefined
+            ? `$${holdingWithDividends.projectedIncome.toFixed(2)}`
+            : 'N/A';
+
+          console.log(
+            `  ${holding.symbol.padEnd(8)} ${holding.type.padEnd(8)} ${holding.quantity
+              .toString()
+              .padEnd(7)} $${cost.toFixed(2).padStart(8)} $${value.toFixed(2).padStart(9)} ${pnlString.padStart(10)} ${yieldStr.padStart(8)} ${yocStr.padStart(6)} ${incomeStr.padStart(11)}`,
+          );
+        }
       }
 
-      console.log(`  ${'-'.repeat(60)}`);
+      if (skipDividends) {
+        console.log(`  ${'-'.repeat(60)}`);
+      } else {
+        console.log(`  ${'-'.repeat(85)}`);
+      }
+
       const totalPnl = totalValue - totalCost;
       console.log(`\n  Total Cost:  $${totalCost.toFixed(2)}`);
       console.log(`  Total Value: $${totalValue.toFixed(2)}`);
-      console.log(`  Total P&L:   ${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}\n`);
+      console.log(`  Total P&L:   ${totalPnl >= 0 ? '+' : ''}$${totalPnl.toFixed(2)}`);
+
+      if (!skipDividends) {
+        const dividendSummary = getPortfolioDividendSummary(holdingsWithDividends, currentPrices);
+        console.log(`\n  Dividend Summary:`);
+        console.log(`    Total Projected Income: $${dividendSummary.totalProjectedIncome.toFixed(2)}/year`);
+        console.log(`    Weighted Avg Yield:     ${dividendSummary.weightedAvgYield.toFixed(2)}%`);
+        console.log(`    Portfolio YOC:          ${dividendSummary.totalYOC.toFixed(2)}%`);
+      }
+
+      console.log('');
       return;
     }
 
@@ -609,6 +696,172 @@ async function run(): Promise<void> {
       console.log(`  Realized P/L:   ${formatSignedCurrency(realizedPL)}`);
       console.log(`  ${'-'.repeat(30)}`);
       console.log(`  Total P/L:      ${formatSignedCurrency(totalPL)}\n`);
+      return;
+    }
+
+    case 'dividends':
+    case 'div': {
+      parseOrExit(z.array(z.string()).max(0), args, ['Usage: portfolio dividends']);
+      console.log(`\nDividend Details - ${portfolio.name}\n`);
+
+      if (portfolio.holdings.length === 0) {
+        console.log('  No holdings yet.\n');
+        return;
+      }
+
+      const stockHoldings = portfolio.holdings.filter(h => h.type === 'stock');
+      if (stockHoldings.length === 0) {
+        console.log('  No stock holdings.\n');
+        return;
+      }
+
+      console.log('  Symbol    Name                    Yield%   Fwd%   YOC%    Income/Yr   Ex-Date');
+      console.log(`  ${'-'.repeat(80)}`);
+
+      const holdingsWithDividends: HoldingWithDividends[] = [];
+      const currentPrices = new Map<string, number>();
+
+      for (const holding of stockHoldings) {
+        const priceData = await fetchPrice(holding.symbol, holding.type);
+        const livePrice = priceData?.price ?? holding.purchasePrice;
+        currentPrices.set(holding.symbol, livePrice);
+
+        const dividendData = await fetchDividendData(holding.symbol);
+        const holdingWithDividends = dividendData
+          ? calculateDividendMetrics(holding, dividendData, livePrice)
+          : { ...holding };
+
+        holdingsWithDividends.push(holdingWithDividends);
+
+        const name = holding.name.length > 20 ? holding.name.substring(0, 17) + '...' : holding.name;
+        const yieldStr = holdingWithDividends.dividendData
+          ? `${holdingWithDividends.dividendData.trailingYield.toFixed(2)}%`
+          : 'N/A';
+        const fwdStr = holdingWithDividends.dividendData
+          ? `${holdingWithDividends.dividendData.forwardYield.toFixed(2)}%`
+          : 'N/A';
+        const yocStr = holdingWithDividends.yoc !== undefined
+          ? `${holdingWithDividends.yoc.toFixed(2)}%`
+          : 'N/A';
+        const incomeStr = holdingWithDividends.projectedIncome !== undefined
+          ? `$${holdingWithDividends.projectedIncome.toFixed(2)}`
+          : 'N/A';
+        const exDateStr = holdingWithDividends.dividendData?.exDividendDate
+          ? holdingWithDividends.dividendData.exDividendDate
+          : 'N/A';
+
+        console.log(
+          `  ${holding.symbol.padEnd(8)} ${name.padEnd(22)} ${yieldStr.padStart(6)} ${fwdStr.padStart(6)} ${yocStr.padStart(6)} ${incomeStr.padStart(11)}  ${exDateStr}`,
+        );
+      }
+
+      console.log(`  ${'-'.repeat(80)}`);
+
+      const dividendSummary = getPortfolioDividendSummary(holdingsWithDividends, currentPrices);
+      console.log(`\n  Portfolio Totals:`);
+      console.log(`    Total Projected Income: $${dividendSummary.totalProjectedIncome.toFixed(2)}/year`);
+      console.log(`    Monthly Estimate:       $${(dividendSummary.totalProjectedIncome / 12).toFixed(2)}`);
+      console.log(`    Weighted Avg Yield:     ${dividendSummary.weightedAvgYield.toFixed(2)}%`);
+      console.log(`    Portfolio YOC:          ${dividendSummary.totalYOC.toFixed(2)}%\n`);
+      return;
+    }
+
+    case 'dividend-summary':
+    case 'divsum': {
+      parseOrExit(z.array(z.string()).max(0), args, ['Usage: portfolio dividend-summary']);
+      console.log(`\nDividend Summary - ${portfolio.name}\n`);
+
+      if (portfolio.holdings.length === 0) {
+        console.log('  No holdings yet.\n');
+        return;
+      }
+
+      const stockHoldings = portfolio.holdings.filter(h => h.type === 'stock');
+      if (stockHoldings.length === 0) {
+        console.log('  No stock holdings.\n');
+        return;
+      }
+
+      const holdingsWithDividends: HoldingWithDividends[] = [];
+      const currentPrices = new Map<string, number>();
+
+      for (const holding of stockHoldings) {
+        const priceData = await fetchPrice(holding.symbol, holding.type);
+        const livePrice = priceData?.price ?? holding.purchasePrice;
+        currentPrices.set(holding.symbol, livePrice);
+
+        const dividendData = await fetchDividendData(holding.symbol);
+        const holdingWithDividends = dividendData
+          ? calculateDividendMetrics(holding, dividendData, livePrice)
+          : { ...holding };
+
+        holdingsWithDividends.push(holdingWithDividends);
+      }
+
+      const dividendSummary = getPortfolioDividendSummary(holdingsWithDividends, currentPrices);
+
+      console.log('  Portfolio Dividend Metrics\n');
+      console.log(`    Total Projected Income:   $${dividendSummary.totalProjectedIncome.toFixed(2)}/year`);
+      console.log(`    Monthly Estimate:         $${(dividendSummary.totalProjectedIncome / 12).toFixed(2)}`);
+      console.log(`    Quarterly Estimate:       $${(dividendSummary.totalProjectedIncome / 4).toFixed(2)}`);
+      console.log(`    Weighted Average Yield:   ${dividendSummary.weightedAvgYield.toFixed(2)}%`);
+      console.log(`    Portfolio Yield on Cost:  ${dividendSummary.totalYOC.toFixed(2)}%`);
+      console.log(`    Dividend-Paying Stocks:   ${holdingsWithDividends.filter(h => h.dividendData && h.dividendData.trailingYield > 0).length}/${stockHoldings.length}\n`);
+      return;
+    }
+
+    case 'calendar':
+    case 'cal': {
+      const daysArg = args[0] ? parseInt(args[0]) : 30;
+      const maxDays = isNaN(daysArg) || daysArg <= 0 ? 30 : daysArg;
+
+      console.log(`\nDividend Calendar - Next ${maxDays} Days - ${portfolio.name}\n`);
+
+      if (portfolio.holdings.length === 0) {
+        console.log('  No holdings yet.\n');
+        return;
+      }
+
+      const stockHoldings = portfolio.holdings.filter(h => h.type === 'stock');
+      if (stockHoldings.length === 0) {
+        console.log('  No stock holdings.\n');
+        return;
+      }
+
+      const holdingsWithDividends: HoldingWithDividends[] = [];
+      const currentPrices = new Map<string, number>();
+
+      for (const holding of stockHoldings) {
+        const priceData = await fetchPrice(holding.symbol, holding.type);
+        const livePrice = priceData?.price ?? holding.purchasePrice;
+        currentPrices.set(holding.symbol, livePrice);
+
+        const dividendData = await fetchDividendData(holding.symbol);
+        const holdingWithDividends = dividendData
+          ? calculateDividendMetrics(holding, dividendData, livePrice)
+          : { ...holding };
+
+        holdingsWithDividends.push(holdingWithDividends);
+      }
+
+      const dividendSummary = getPortfolioDividendSummary(holdingsWithDividends, currentPrices);
+      const upcoming = filterUpcomingDividends(dividendSummary, maxDays);
+
+      if (upcoming.length === 0) {
+        console.log('  No upcoming ex-dividend dates in the specified period.\n');
+        return;
+      }
+
+      console.log('  Date       Symbol    Name                    Days Until');
+      console.log(`  ${'-'.repeat(60)}`);
+
+      for (const item of upcoming) {
+        const name = item.name.length > 20 ? item.name.substring(0, 17) + '...' : item.name;
+        const daysLabel = item.daysUntil === 0 ? 'TODAY' : item.daysUntil === 1 ? 'tomorrow' : `${item.daysUntil} days`;
+        console.log(`  ${item.date}  ${item.symbol.padEnd(8)} ${name.padEnd(22)} ${daysLabel}`);
+      }
+
+      console.log(`  ${'-'.repeat(60)}\n`);
       return;
     }
 
