@@ -1,5 +1,14 @@
 export type AssetType = 'stock' | 'crypto';
 
+export interface DividendData {
+  trailingYield: number;
+  forwardYield: number;
+  annualDividendRate: number;
+  exDividendDate: string | null;
+  currency: string;
+  lastUpdated: string;
+}
+
 export interface Holding {
   id: string;
   symbol: string;
@@ -8,6 +17,12 @@ export interface Holding {
   quantity: number;
   purchasePrice: number;
   purchaseDate: string;
+}
+
+export interface HoldingWithDividends extends Holding {
+  dividendData?: DividendData;
+  yoc?: number;
+  projectedIncome?: number;
 }
 
 export interface SoldLot {
@@ -40,6 +55,25 @@ export interface PortfolioSummary {
   totalCost: number;
   totalGain: number;
   totalGainPercent: number;
+}
+
+export interface DividendSummary {
+  totalProjectedIncome: number;
+  weightedAvgYield: number;
+  totalYOC: number;
+  upcomingExDates: Array<{
+    symbol: string;
+    name: string;
+    date: string;
+    daysUntil: number;
+  }>;
+}
+
+export interface UpcomingDividend {
+  symbol: string;
+  name: string;
+  date: string;
+  daysUntil: number;
 }
 
 export interface Portfolio {

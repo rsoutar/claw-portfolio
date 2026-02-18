@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { TrendingUp, Plus, Download, RefreshCw, Trash2, Edit2, X, Wallet, BarChart3, DollarSign, ChevronDown, FolderPlus, Trash } from 'lucide-react';
-import { Holding, PriceData, PortfolioSummary, Portfolio } from '@/lib/types';
+import { TrendingUp, Plus, Download, RefreshCw, Trash2, Edit2, X, Wallet, BarChart3, DollarSign, ChevronDown, FolderPlus, Trash, Calendar, Percent } from 'lucide-react';
+import { Holding, PriceData, PortfolioSummary, Portfolio, DividendSummary, HoldingWithDividends } from '@/lib/types';
 
 const COLORS = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316'];
 
@@ -21,6 +21,11 @@ export default function PortfolioPage() {
   const [showNewPortfolio, setShowNewPortfolio] = useState(false);
   const [newPortfolioName, setNewPortfolioName] = useState('');
   const [realizedPL, setRealizedPL] = useState(0);
+  const [dividendData, setDividendData] = useState<{
+    holdings: HoldingWithDividends[];
+    summary: DividendSummary;
+  } | null>(null);
+  const [showDividends, setShowDividends] = useState(false);
 
   const [formData, setFormData] = useState({
     symbol: '',
@@ -59,6 +64,11 @@ export default function PortfolioPage() {
         
         const priceData = await priceRes.json();
         setPrices(priceData);
+
+        // Fetch dividend data
+        const dividendRes = await fetch('/api/dividends');
+        const dividendData = await dividendRes.json();
+        setDividendData(dividendData);
       }
     } catch (error) {
       console.error('Error fetching portfolio:', error);
@@ -392,6 +402,147 @@ export default function PortfolioPage() {
                 </p>
               </div>
             </div>
+
+            {/* Dividend Summary Cards */}
+            {dividendData && dividendData.summary.totalProjectedIncome > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div className="bg-gradient-to-br from-emerald-900/50 to-emerald-800/30 backdrop-blur-sm p-6 rounded-2xl border border-emerald-700/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <DollarSign size={18} className="text-emerald-400" />
+                    <p className="text-slate-400 text-sm">Annual Dividend Income</p>
+                  </div>
+                  <p className="text-2xl font-bold text-emerald-400">
+                    ${dividendData.summary.totalProjectedIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                  <p className="text-sm text-slate-500 mt-1">
+                    ${(dividendData.summary.totalProjectedIncome / 12).toFixed(2)}/mo
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-blue-900/50 to-blue-800/30 backdrop-blur-sm p-6 rounded-2xl border border-blue-700/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Percent size={18} className="text-blue-400" />
+                    <p className="text-slate-400 text-sm">Weighted Avg Yield</p>
+                  </div>
+                  <p className="text-2xl font-bold text-blue-400">
+                    {dividendData.summary.weightedAvgYield.toFixed(2)}%
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-purple-900/50 to-purple-800/30 backdrop-blur-sm p-6 rounded-2xl border border-purple-700/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <TrendingUp size={18} className="text-purple-400" />
+                    <p className="text-slate-400 text-sm">Yield on Cost</p>
+                  </div>
+                  <p className="text-2xl font-bold text-purple-400">
+                    {dividendData.summary.totalYOC.toFixed(2)}%
+                  </p>
+                </div>
+                <div className="bg-gradient-to-br from-amber-900/50 to-amber-800/30 backdrop-blur-sm p-6 rounded-2xl border border-amber-700/50">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Calendar size={18} className="text-amber-400" />
+                    <p className="text-slate-400 text-sm">Upcoming Ex-Dates</p>
+                  </div>
+                  <p className="text-2xl font-bold text-amber-400">
+                    {dividendData.summary.upcomingExDates.length}
+                  </p>
+                  <p className="text-sm text-slate-500 mt-1">Next 30 days</p>
+                </div>
+              </div>
+            )}
+
+            {/* Toggle Dividends Button */}
+            {dividendData && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setShowDividends(!showDividends)}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-600/50 rounded-xl transition-colors text-emerald-400"
+                >
+                  <DollarSign size={18} />
+                  <span>{showDividends ? 'Hide' : 'Show'} Dividend Details</span>
+                </button>
+              </div>
+            )}
+
+            {/* Dividends Section */}
+            {showDividends && dividendData && (
+              <div className="bg-slate-800/50 backdrop-blur-sm rounded-2xl border border-slate-700 overflow-hidden mb-8">
+                <div className="p-6 border-b border-slate-700">
+                  <h2 className="text-lg font-semibold flex items-center gap-2">
+                    <DollarSign size={20} className="text-emerald-400" />
+                    Dividend Details
+                  </h2>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="bg-slate-700/30">
+                      <tr>
+                        <th className="px-6 py-4 text-left text-xs font-medium text-slate-400 uppercase tracking-wider">Asset</th>
+                        <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Yield %</th>
+                        <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">YOC %</th>
+                        <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Annual Income</th>
+                        <th className="px-6 py-4 text-right text-xs font-medium text-slate-400 uppercase tracking-wider">Ex-Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-700/50">
+                      {dividendData.holdings
+                        .filter(h => h.dividendData && h.dividendData.trailingYield > 0)
+                        .map((h) => (
+                          <tr key={h.id} className="hover:bg-slate-700/30 transition-colors">
+                            <td className="px-6 py-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-emerald-500/20 text-emerald-400">
+                                  {h.symbol.slice(0, 2)}
+                                </div>
+                                <div>
+                                  <div className="font-semibold">{h.symbol}</div>
+                                  <div className="text-sm text-slate-400">{h.name}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <span className="text-emerald-400">
+                                {h.dividendData?.trailingYield.toFixed(2)}%
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <span className="text-purple-400">
+                                {h.yoc?.toFixed(2)}%
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-right font-semibold">
+                              ${h.projectedIncome?.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </td>
+                            <td className="px-6 py-4 text-right text-slate-400">
+                              {h.dividendData?.exDividendDate || 'N/A'}
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+                {dividendData.summary.upcomingExDates.length > 0 && (
+                  <div className="p-6 border-t border-slate-700">
+                    <h3 className="text-sm font-medium text-slate-400 mb-4 flex items-center gap-2">
+                      <Calendar size={16} className="text-amber-400" />
+                      Upcoming Ex-Dividend Dates (Next 30 Days)
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {dividendData.summary.upcomingExDates.map((item) => (
+                        <div
+                          key={item.symbol}
+                          className="px-3 py-2 bg-amber-500/10 border border-amber-500/30 rounded-lg text-sm"
+                        >
+                          <span className="font-semibold text-amber-400">{item.symbol}</span>
+                          <span className="text-slate-400 ml-2">{item.date}</span>
+                          <span className="text-slate-500 ml-1">
+                            ({item.daysUntil === 0 ? 'Today' : `${item.daysUntil}d`})
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {allocationData.length > 0 && (
               <div className="bg-slate-800/50 backdrop-blur-sm p-6 rounded-2xl border border-slate-700 mb-8">

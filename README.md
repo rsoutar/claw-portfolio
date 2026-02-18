@@ -39,6 +39,16 @@ portfolio pnl
 # Show total value
 portfolio value
 
+# Show dividend details
+portfolio dividends
+
+# Show dividend summary
+portfolio dividend-summary
+
+# Show upcoming ex-dividend dates (default 30 days)
+portfolio calendar
+portfolio calendar 60
+
 # List all portfolios
 portfolio portfolios
 
@@ -68,6 +78,7 @@ Portfolio data: `data/portfolio.json`
 - **Real-time prices** - Stocks via Yahoo Finance, crypto via CoinGecko
 - **Multiple portfolios** - Create, switch, delete portfolios
 - **P&L tracking** - Per-asset profit/loss with percentages
+- **Dividend tracking** - Yield on Cost, projected income, ex-dividend dates
 - **CLI-first** - Designed for OpenClaw integration
 - **Web UI** - Optional browser interface
 

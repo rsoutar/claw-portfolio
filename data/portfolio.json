@@ -5,29 +5,29 @@
       "name": "Main Portfolio",
       "holdings": [
         {
+          "id": "ef9c66c5-4f9b-4316-935a-285647ab71e8",
           "symbol": "PLTR",
           "name": "PLTR",
           "type": "stock",
           "quantity": 1,
           "purchasePrice": 80,
-          "purchaseDate": "2026-02-17",
-          "id": "ef9c66c5-4f9b-4316-935a-285647ab71e8"
+          "purchaseDate": "2026-02-17"
         },
         {
+          "id": "129274bc-51ea-4265-9491-618e45e6ba8f",
           "symbol": "COST",
           "name": "Costco",
           "type": "stock",
           "quantity": 1,
           "purchasePrice": 500,
-          "purchaseDate": "2026-02-17",
-          "id": "129274bc-51ea-4265-9491-618e45e6ba8f"
+          "purchaseDate": "2026-02-17"
         },
         {
           "id": "f90b42ad-7f49-4305-a1cc-ff412fb20f92",
           "symbol": "AAPL",
           "name": "Apple Inc.",
           "type": "stock",
-          "quantity": 10,
+          "quantity": 3,
           "purchasePrice": 150,
           "purchaseDate": "2026-02-17"
         },
@@ -39,10 +39,71 @@
           "quantity": 0.5,
           "purchasePrice": 42000,
           "purchaseDate": "2026-02-17"
+        },
+        {
+          "id": "d3ec76db-c3a5-4dcc-af36-b695d27ee1ca",
+          "symbol": "FDS",
+          "name": "FactSet Research Systems",
+          "type": "stock",
+          "quantity": 1,
+          "purchasePrice": 450,
+          "purchaseDate": "2026-02-17"
+        },
+        {
+          "id": "057cc444-d02e-41d8-a79e-371bc1da78fb",
+          "symbol": "MSFT",
+          "name": "Microsoft Corp.",
+          "type": "stock",
+          "quantity": 5,
+          "purchasePrice": 400,
+          "purchaseDate": "2025-01-15"
+        },
+        {
+          "id": "1d20137e-c4c6-4de3-a4ee-e2f7cd5ef548",
+          "symbol": "GOOGL",
+          "name": "Alphabet Inc.",
+          "type": "stock",
+          "quantity": 2,
+          "purchasePrice": 140,
+          "purchaseDate": "2026-02-18"
+        }
+      ],
+      "sellHistory": [
+        {
+          "id": "a50e42c4-ecdb-4846-9e40-34dfc02804a4",
+          "symbol": "AAPL",
+          "quantity": 5,
+          "sellPrice": 180,
+          "sellDate": "2025-06-01",
+          "lotsSold": [
+            {
+              "holdingId": "f90b42ad-7f49-4305-a1cc-ff412fb20f92",
+              "quantity": 5,
+              "costBasis": 750,
+              "realizedPL": 150
+            }
+          ],
+          "totalRealizedPL": 150
+        },
+        {
+          "id": "7117081b-284f-4fde-bfad-b3c6a0e97bda",
+          "symbol": "AAPL",
+          "quantity": 2,
+          "sellPrice": 170,
+          "sellDate": "2026-02-18",
+          "lotsSold": [
+            {
+              "holdingId": "f90b42ad-7f49-4305-a1cc-ff412fb20f92",
+              "quantity": 2,
+              "costBasis": 300,
+              "realizedPL": 40
+            }
+          ],
+          "totalRealizedPL": 40
         }
       ],
       "createdAt": "2026-02-17T19:03:29.891Z",
-      "lastUpdated": "2026-02-17T19:12:53.274Z"
+      "lastUpdated": "2026-02-18T11:06:53.972Z"
     },
     {
       "id": "829464d6-547d-48c3-91d3-e2bdf111618a",
@@ -58,6 +119,7 @@
           "purchaseDate": "2026-02-17"
         }
       ],
+      "sellHistory": [],
       "createdAt": "2026-02-17T19:13:01.810Z",
       "lastUpdated": "2026-02-17T19:13:01.839Z"
     }
