@@ -8,17 +8,25 @@ import {
   addHolding, 
   updateHolding, 
   removeHolding,
-  exportToCsv 
+  exportToCsv,
+  getSellHistory,
+  addSellRecord
 } from '@/lib/storage';
-import { Holding, Portfolio } from '@/lib/types';
+import { Holding, Portfolio, SellRecord } from '@/lib/types';
 
 export async function GET() {
   const portfolio = getActivePortfolio();
   const state = loadPortfolio();
+  
+  const sellHistory = getSellHistory();
+  const realizedPL = sellHistory.reduce((sum, s) => sum + s.totalRealizedPL, 0);
+  
   return NextResponse.json({
     portfolio,
     portfolios: state.portfolios,
     activePortfolioId: state.activePortfolioId,
+    realizedPL,
+    sellHistory,
   });
 }
 
@@ -47,13 +55,76 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: true });
     }
     
+    if (body.action === 'sell') {
+      const portfolio = getActivePortfolio();
+      const symbol = body.symbol.toUpperCase();
+      const sellQty = parseFloat(body.quantity);
+      const sellPrice = parseFloat(body.sellPrice);
+      const sellDate = body.sellDate || new Date().toISOString().split('T')[0];
+      
+      const holdingsToSell = portfolio.holdings
+        .filter(h => h.symbol === symbol)
+        .sort((a, b) => new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime());
+      
+      const totalAvailable = holdingsToSell.reduce((sum, h) => sum + h.quantity, 0);
+      if (sellQty > totalAvailable) {
+        return NextResponse.json({ error: `Not enough ${symbol} to sell. Available: ${totalAvailable}` }, { status: 400 });
+      }
+      
+      const lotsSold = [];
+      let remainingToSell = sellQty;
+      let totalRealizedPL = 0;
+      const state = loadPortfolio();
+      const activePortfolio = state.portfolios.find(p => p.id === state.activePortfolioId);
+      
+      if (!activePortfolio) {
+        return NextResponse.json({ error: 'Active portfolio not found' }, { status: 500 });
+      }
+      
+      for (const holding of holdingsToSell) {
+        if (remainingToSell <= 0) break;
+        const qtyFromThisLot = Math.min(holding.quantity, remainingToSell);
+        const costBasis = qtyFromThisLot * holding.purchasePrice;
+        const proceeds = qtyFromThisLot * sellPrice;
+        const realizedPL = proceeds - costBasis;
+        totalRealizedPL += realizedPL;
+        
+        lotsSold.push({
+          holdingId: holding.id,
+          quantity: qtyFromThisLot,
+          costBasis,
+          realizedPL,
+        });
+        
+        holding.quantity -= qtyFromThisLot;
+        remainingToSell -= qtyFromThisLot;
+        
+        if (holding.quantity <= 0) {
+          const idx = activePortfolio.holdings.findIndex(h => h.id === holding.id);
+          if (idx !== -1) activePortfolio.holdings.splice(idx, 1);
+        }
+      }
+      
+      const sellRecord: Omit<SellRecord, 'id'> = {
+        symbol,
+        quantity: sellQty,
+        sellPrice,
+        sellDate,
+        lotsSold,
+        totalRealizedPL,
+      };
+      
+      const savedRecord = addSellRecord(sellRecord);
+      return NextResponse.json(savedRecord, { status: 201 });
+    }
+    
     const holding = addHolding({
       symbol: body.symbol,
       name: body.name,
       type: body.type,
       quantity: body.quantity,
       purchasePrice: body.purchasePrice,
-      purchaseDate: body.purchaseDate,
+      purchaseDate: body.purchaseDate || new Date().toISOString().split('T')[0],
     });
     return NextResponse.json(holding, { status: 201 });
   } catch (error) {
